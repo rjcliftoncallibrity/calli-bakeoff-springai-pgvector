@@ -7,6 +7,7 @@ import org.springframework.ai.reader.tika.TikaDocumentReader;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.stereotype.Component;
@@ -31,11 +32,23 @@ public class IngestionService implements CommandLineRunner {
     public void run(String... args) throws IOException {
         List<Document> documents = new ArrayList<>();
         Resource[] resources = resourcePatternResolver.getResources("classpath:/docs/*");
-        Arrays.stream(resources).forEach(resource -> {
-            TikaDocumentReader tikaDocumentReader = new TikaDocumentReader(resource);
-            documents.addAll(tikaDocumentReader.read());
-        });
+        processResources(resources, documents);
         vectorStore.add(new TokenTextSplitter().split(documents));
         log.info("VectorStore Loaded with data!");
+    }
+
+    private void processResources(Resource[] resources, List<Document> documents) {
+        Arrays.stream(resources).forEach(resource -> {
+            try {
+                if (resource.getFile().isDirectory()) {
+                    processResources(resourcePatternResolver.getResources("file:" + resource.getFile().getPath() + "/*"), documents);
+                } else {
+                    TikaDocumentReader tikaDocumentReader = new TikaDocumentReader(resource);
+                    documents.addAll(tikaDocumentReader.read());
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 }
